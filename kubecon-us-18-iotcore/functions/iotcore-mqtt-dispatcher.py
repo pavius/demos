@@ -25,6 +25,8 @@ import nuclio_sdk
 #     triggers:
 #       kickstart:
 #         kind: kickstart
+#         workerAllocatorName: defaultHTTPWorkerAllocator
+#
 
 def handler(context, event):
     context.logger.debug_with('Called', path=event.path)
