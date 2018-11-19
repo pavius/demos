@@ -14,9 +14,6 @@ import nuclio_sdk
 #       commands:
 #       - apk add --no-cache build-base openssl-dev libffi-dev
 #       - pip install kubernetes nuclio_sdk
-#     env:
-#     - name: DEPLOYMENT_NAME
-#       value: tdemo
 #     triggers:
 #       periodic:
 #         kind: cron
@@ -36,7 +33,7 @@ def handler(context, event):
 
     context.logger.info_with('Updating', current_version=current_version)
 
-    context.platform.call_function('iotcore-mqtt-dispatcher', nuclio_sdk.Event(path='/publish', body={
+    context.platform.call_function('iotcore-mqtt-dispatcher-' + context.config['index'], nuclio_sdk.Event(path='/publish', body={
         'topic': 'state',
         'payload': json.dumps({
             'versions': {
@@ -61,7 +58,8 @@ def init_context(context):
 
     # set configuration
     setattr(context, 'config', {
-        'deployment_name': os.environ['DEPLOYMENT_NAME']
+        'index': os.environ['STATUS_UPDATER_INDEX']
+        'deployment_name': os.environ['STATUS_UPDATER_DEPLOYMENT_NAME']
     })
 
 

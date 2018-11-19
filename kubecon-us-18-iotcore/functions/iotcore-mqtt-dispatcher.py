@@ -35,13 +35,14 @@ def handler(context, event):
 
 def init_context(context):
     setattr(context, 'config', {
-        'project_id': os.environ['IOTCORE_PROJECT_ID'],
-        'region_name': os.environ['IOTCORE_REGION_NAME'],
-        'registry_id': os.environ['IOTCORE_REGISTRY_ID'],
-        'device_id': os.environ['IOTCORE_DEVICE_ID'],
-        'algorithm': os.environ.get('IOTCORE_ALGORITHM', 'RS256'),
-        'private_key': os.environ['IOTCORE_PRIVATE_KEY'],
-        'ca_cert_path': os.environ['IOTCORE_CA_CERT_PATH'],
+        'index': os.environ['IOTCORE_MQTT_DISPATCHER_INDEX'],
+        'project_id': os.environ['IOTCORE_MQTT_DISPATCHER_PROJECT_ID'],
+        'region_name': os.environ['IOTCORE_MQTT_DISPATCHER_REGION_NAME'],
+        'registry_id': os.environ['IOTCORE_MQTT_DISPATCHER_REGISTRY_ID'],
+        'device_id': os.environ['IOTCORE_MQTT_DISPATCHER_DEVICE_ID'],
+        'algorithm': os.environ.get('IOTCORE_MQTT_DISPATCHER_ALGORITHM', 'RS256'),
+        'private_key': os.environ['IOTCORE_MQTT_DISPATCHER_PRIVATE_KEY'],
+        'ca_cert_path': os.environ.get('IOTCORE_MQTT_DISPATCHER_CA_CERT_PATH', '/tmp/ca_cert_path.pem'),
     })
 
     setattr(context, 'mqtt_client', None)
@@ -78,7 +79,7 @@ def _on_config_message(context, topic, payload):
     context.logger.debug_with('Got config message', payload=str(payload))
 
     # call config reader
-    context.platform.call_function('config-reader', nuclio_sdk.Event(body=payload))
+    context.platform.call_function('config-reader-' + context.config['index'], nuclio_sdk.Event(body=payload))
 
 
 class Client(object):

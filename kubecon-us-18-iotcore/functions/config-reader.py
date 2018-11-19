@@ -32,25 +32,25 @@ def handler(context, event):
     }))
     
     # get service namespace, name and image
-    service_namespace = event.body.get('namespace') or context.namespace
-    service_name = event.body['name']
-    service_image = f'{os.environ.get("LOCAL_REGISTRY_URL")}/{event.body["source"]["image"]}'
+    deployment_namespace = event.body.get('namespace') or context.namespace
+    deployment_name = event.body['name'] + '-' + context.config['index']
+    deployment_image = f'{os.environ.get("LOCAL_REGISTRY_URL")}/{event.body["source"]["image"]}'
 
     # update the deployment to use the version
-    context.logger.debug_with('Updating service image', 
-        service_namespace=service_namespace,
-        service_name=service_name,
-        service_image=service_image)
+    context.logger.debug_with('Updating deployment image', 
+        deployment_namespace=deployment_namespace,
+        deployment_name=deployment_name,
+        deployment_image=deployment_image)
 
     # update the deployment
-    kubernetes.client.AppsV1Api().patch_namespaced_deployment(event.body['name'], service_namespace, {
+    kubernetes.client.AppsV1Api().patch_namespaced_deployment(deployment_name, deployment_namespace, {
         'spec': {
             'template': {
                 'spec': {
                     'containers': [
                         {
                             'name': event.body['name'],
-                            'image': service_image
+                            'image': deployment_image
                         }
                     ]
                 }
@@ -69,3 +69,6 @@ def init_context(context):
 
     # get current namespace
     setattr(context, 'namespace', current_namespace)
+    setattr(context, 'config', {
+        'index': os.environ['CONFIG_READER_INDEX'],
+    })
