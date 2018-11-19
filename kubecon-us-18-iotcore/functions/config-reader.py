@@ -33,17 +33,17 @@ def handler(context, event):
     }))
 
     local_registry_url = context.config['local_registry_url']
-    
+
     # get service namespace, name and image
     deployment_namespace = event.body.get('namespace') or context.namespace
     deployment_name = event.body['name'] + '-' + context.config['index']
     deployment_image = f'{local_registry_url}/{event.body["source"]["image"]}'
 
     # update the deployment to use the version
-    context.logger.debug_with('Updating deployment image', 
-        deployment_namespace=deployment_namespace,
-        deployment_name=deployment_name,
-        deployment_image=deployment_image)
+    context.logger.debug_with('Updating deployment image',
+                              deployment_namespace=deployment_namespace,
+                              deployment_name=deployment_name,
+                              deployment_image=deployment_image)
 
     # update the deployment
     kubernetes.client.AppsV1Api().patch_namespaced_deployment(deployment_name, deployment_namespace, {

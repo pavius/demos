@@ -69,23 +69,23 @@ def _sync_docker_image(context, source, dest):
 def _run_command(context, command):
     context.logger.debug_with('Running command', command=command)
     delegator_command = delegator.run(command)
-    
+
     # get stuff from command
     command_stdout = delegator_command.out
     command_stderr = delegator_command.err
     command_return_code = delegator_command.return_code
 
     if command_return_code != 0:
-        context.logger.warn_with('Failed to run command', 
-                                 command=command, 
-                                 rc=command_return_code, 
-                                 out=command_stdout, 
+        context.logger.warn_with('Failed to run command',
+                                 command=command,
+                                 rc=command_return_code,
+                                 out=command_stdout,
                                  err=command_stderr)
         raise RuntimeError('Failed to run command')
     else:
-        context.logger.debug_with('Command completed successfully', 
-                                  command=command, 
-                                  out=command_stdout, 
+        context.logger.debug_with('Command completed successfully',
+                                  command=command,
+                                  out=command_stdout,
                                   err=command_stderr)
 
 

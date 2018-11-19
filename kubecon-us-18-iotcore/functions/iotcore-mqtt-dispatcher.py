@@ -33,9 +33,9 @@ def handler(context, event):
     if event.path in ['/', '/init']:
         _init(context)
     elif event.path == '/publish':
-        _publish(context, 
-                 event.body['topic'], 
-                 event.body.get('qos', 0), 
+        _publish(context,
+                 event.body['topic'],
+                 event.body.get('qos', 0),
                  event.body['payload'])
 
 
