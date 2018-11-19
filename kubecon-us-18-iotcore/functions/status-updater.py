@@ -58,7 +58,7 @@ def init_context(context):
 
     # set configuration
     setattr(context, 'config', {
-        'index': os.environ['STATUS_UPDATER_INDEX']
+        'index': os.environ['STATUS_UPDATER_INDEX'],
         'deployment_name': os.environ['STATUS_UPDATER_DEPLOYMENT_NAME']
     })
 
