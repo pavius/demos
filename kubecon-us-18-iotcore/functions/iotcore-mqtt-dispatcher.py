@@ -9,6 +9,7 @@ import jwt
 import paho.mqtt.client
 import nuclio_sdk
 
+
 # @nuclio.configure
 #
 # function.yaml:
