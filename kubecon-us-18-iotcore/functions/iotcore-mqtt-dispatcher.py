@@ -24,7 +24,7 @@ import nuclio_sdk
 
 def handler(context, event):
     context.logger.debug_with('Called', path=event.path)
-    if event.path == '/init':
+    if event.path in ['', '/init']:
         _init(context)
     elif event.path == '/publish':
         _publish(context, 

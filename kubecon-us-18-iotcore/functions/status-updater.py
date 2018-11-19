@@ -40,7 +40,7 @@ def handler(context, event):
                 deployment_name: current_version
             }
         })
-    }))
+    }), timeout=5)
 
     context.last_updated_version = current_version
 
