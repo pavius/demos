@@ -21,6 +21,9 @@ import nuclio_sdk
 #       - apt-get update && apt-get install -y curl
 #       - pip install cryptography==2.3.1 pyjwt==1.6.4 paho-mqtt==1.3.1
 #       - curl -L https://pki.google.com/roots.pem -o /tmp/ca_cert_path.pem
+#     triggers:
+#       kickstart:
+#         kind: kickstart
 
 def handler(context, event):
     context.logger.debug_with('Called', path=event.path)
