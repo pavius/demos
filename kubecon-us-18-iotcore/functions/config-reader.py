@@ -15,6 +15,7 @@ import nuclio_sdk
 #       - apk add --no-cache build-base openssl-dev libffi-dev
 #       - pip install kubernetes nuclio_sdk
 
+
 def handler(context, event):
     context.logger.debug_with('Got event', body=event.body.decode('utf-8'))
     event.body = json.loads(event.body.decode('utf-8'))
