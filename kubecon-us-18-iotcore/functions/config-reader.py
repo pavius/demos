@@ -74,6 +74,6 @@ def init_context(context):
     setattr(context, 'config', {
         'index': os.environ['CONFIG_READER_INDEX'],
         'local_registry_url': os.environ['CONFIG_READER_LOCAL_REGISTRY_URL'],
-        'local_registry_username': os.environ['CONFIG_READER_LOCAL_REGISTRY_USERNAME']
+        'local_registry_username': os.environ['CONFIG_READER_LOCAL_REGISTRY_USERNAME'],
         'local_registry_password': os.environ['CONFIG_READER_LOCAL_REGISTRY_PASSWORD']
     })
