@@ -23,18 +23,20 @@ def handler(context, event):
     context.platform.call_function('sync-docker-image', nuclio_sdk.Event(body={
         'source': event.body['source'],
         'dest': {
-            'url': os.environ.get('LOCAL_REGISTRY_URL'),
+            'url': context.config['local_registry_url'],
             'creds': {
-                'username': os.environ.get('LOCAL_REGISTRY_USERNAME'),
-                'password': os.environ.get('LOCAL_REGISTRY_PASSWORD')
+                'username': context.config['local_registry_username'],
+                'password': context.config['local_registry_password']
             }
         }
     }))
+
+    local_registry_url = context.config['local_registry_url']
     
     # get service namespace, name and image
     deployment_namespace = event.body.get('namespace') or context.namespace
     deployment_name = event.body['name'] + '-' + context.config['index']
-    deployment_image = f'{os.environ.get("LOCAL_REGISTRY_URL")}/{event.body["source"]["image"]}'
+    deployment_image = f'{local_registry_url}/{event.body["source"]["image"]}'
 
     # update the deployment to use the version
     context.logger.debug_with('Updating deployment image', 
@@ -71,4 +73,7 @@ def init_context(context):
     setattr(context, 'namespace', current_namespace)
     setattr(context, 'config', {
         'index': os.environ['CONFIG_READER_INDEX'],
+        'local_registry_url': os.environ['CONFIG_READER_LOCAL_REGISTRY_URL'],
+        'local_registry_username': os.environ['CONFIG_READER_LOCAL_REGISTRY_USERNAME']
+        'local_registry_password': os.environ['CONFIG_READER_LOCAL_REGISTRY_PASSWORD']
     })
