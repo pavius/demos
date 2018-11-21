@@ -30,7 +30,9 @@ class DemoDeployer(object):
                  device_id_format,
                  num_devices,
                  service_account_info,
-                 source_code_base_url):
+                 source_code_base_url,
+                 system_password,
+                 ssh_password):
 
         self._logger = logger
         self._ssh_clients = {}
@@ -47,12 +49,12 @@ class DemoDeployer(object):
         self._num_devices = num_devices
         self._service_account_info = service_account_info
         self._source_code_base_url = source_code_base_url
+        self._system_password = system_password
+        self._ssh_password = ssh_password
 
         self._iotcore_client = self._create_iotcore_client(service_account_info)
 
     def deploy(self):
-        self._system_password = 'iqapJmg0IELOBVgI'
-        self._ssh_password = 'j0WVLqGiXOH3FtkJ'
         self._username = 'iguazio'
 
         # connect to the appnode
@@ -77,13 +79,26 @@ class DemoDeployer(object):
         self._run_command('appnode', 'kubectl delete -n default-tenant deploy,function,project -l app=iotcoredemo',
                           raise_on_error=False)
 
+        # create functions that exist once
+        self._create_system_project()
+
+        # for each device
+        for device_info in device_infos:
+            self._create_device_project(device_info['idx'], device_info, docker_registry_info)
+
+        # close ssh client
+        for ssh_client in self._ssh_clients.values():
+            ssh_client.close()
+
+    def _create_system_project(self):
+
         # create nuclio project
-        nuclio_project_name = self._create_nuclio_project('default-tenant', 'IOT-Core Demo', name='iot-core-demo')
+        project_name = self._create_nuclio_project('default-tenant', 'IoT Core System', name='iot-core-demo-system')
 
         # create sync-docker-image
         self._create_nuclio_function(f'sync-docker-image',
                                      'default-tenant',
-                                     nuclio_project_name,
+                                     project_name,
                                      self._url_contents_to_base64(self._source_code_base_url + 'sync-docker-image.py'),
                                      'main:handler',
                                      'python:3.6',
@@ -97,7 +112,7 @@ class DemoDeployer(object):
         # create api
         self._create_nuclio_function(f'api',
                                      'default-tenant',
-                                     nuclio_project_name,
+                                     project_name,
                                      self._url_contents_to_base64(self._source_code_base_url + 'api.py'),
                                      'main:handler',
                                      'python:3.6',
@@ -119,59 +134,57 @@ class DemoDeployer(object):
                                          'DEMO_API_SERVICE_ACCOUNT': json.dumps(self._service_account_info)
                                      })
 
-        # for each device
-        for device_info in device_infos:
-            device_idx = device_info['idx']
+    def _create_device_project(self, device_idx, device_info, docker_registry_info):
 
-            # create the device service
-            self._create_service(device_idx, device_info['id'])
+        # create nuclio project
+        project_name = self._create_nuclio_project('default-tenant', f'IoT Core Device #{device_idx}', name=f'iot-core-demo-device-{device_idx}')
 
-            # create config-reader function
-            self._create_nuclio_function(f'config-reader-{device_idx}',
-                                         'default-tenant',
-                                         nuclio_project_name,
-                                         self._url_contents_to_base64(self._source_code_base_url + 'config-reader.py'),
-                                         'main:handler',
-                                         'python:3.6',
-                                         env={
-                                             'CONFIG_READER_INDEX': str(device_idx),
-                                             'CONFIG_READER_LOCAL_REGISTRY_URL': docker_registry_info['url'],
-                                             'CONFIG_READER_LOCAL_REGISTRY_USERNAME': docker_registry_info['username'],
-                                             'CONFIG_READER_LOCAL_REGISTRY_PASSWORD': docker_registry_info['password']
-                                         })
+        # create the device service
+        self._create_service(device_idx, device_info['id'])
 
-            # create status-updater function
-            self._create_nuclio_function(f'status-updater-{device_idx}',
-                                         'default-tenant',
-                                         nuclio_project_name,
-                                         self._url_contents_to_base64(self._source_code_base_url + 'status-updater.py'),
-                                         'main:handler',
-                                         'python:3.6',
-                                         env={
-                                             'STATUS_UPDATER_INDEX': str(device_idx),
-                                             'STATUS_UPDATER_DEPLOYMENT_NAME': f'tdemo-{device_idx}',
-                                         })
+        # create config-reader function
+        self._create_nuclio_function(f'config-reader-{device_idx}',
+                                     'default-tenant',
+                                     project_name,
+                                     self._url_contents_to_base64(self._source_code_base_url + 'config-reader.py'),
+                                     'main:handler',
+                                     'python:3.6',
+                                     env={
+                                         'CONFIG_READER_INDEX': str(device_idx),
+                                         'CONFIG_READER_LOCAL_REGISTRY_URL': docker_registry_info['url'],
+                                         'CONFIG_READER_LOCAL_REGISTRY_USERNAME': docker_registry_info['username'],
+                                         'CONFIG_READER_LOCAL_REGISTRY_PASSWORD': docker_registry_info['password']
+                                     })
 
-            # create dispatcher function
-            self._create_nuclio_function(f'iotcore-mqtt-dispatcher-{device_idx}',
-                                         'default-tenant',
-                                         nuclio_project_name,
-                                         self._url_contents_to_base64(
-                                             self._source_code_base_url + 'iotcore-mqtt-dispatcher.py'),
-                                         'main:handler',
-                                         'python:3.6',
-                                         env={
-                                             'IOTCORE_MQTT_DISPATCHER_INDEX': str(device_idx),
-                                             'IOTCORE_MQTT_DISPATCHER_PROJECT_ID': self._project_id,
-                                             'IOTCORE_MQTT_DISPATCHER_REGION_NAME': self._region_name,
-                                             'IOTCORE_MQTT_DISPATCHER_REGISTRY_ID': self._registry_id,
-                                             'IOTCORE_MQTT_DISPATCHER_DEVICE_ID': device_info['id'],
-                                             'IOTCORE_MQTT_DISPATCHER_PRIVATE_KEY': device_info['keys']['private_key'],
-                                         })
+        # create state-updater function
+        self._create_nuclio_function(f'state-updater-{device_idx}',
+                                     'default-tenant',
+                                     project_name,
+                                     # self._url_contents_to_base64(self._source_code_base_url + 'state-updater.py'),
+                                     self._file_contents_to_base64('./functions/state-updater.py'),
+                                     'main:handler',
+                                     'python:3.6',
+                                     env={
+                                         'STATE_UPDATER_INDEX': str(device_idx),
+                                         'STATE_UPDATER_LABEL_SELECTOR': f'iguazio.com/index={device_idx},iguazio.com/monitor-state=true',
+                                     })
 
-        # close ssh client
-        for ssh_client in self._ssh_clients.values():
-            ssh_client.close()
+        # create dispatcher function
+        self._create_nuclio_function(f'iotcore-mqtt-dispatcher-{device_idx}',
+                                     'default-tenant',
+                                     project_name,
+                                     self._url_contents_to_base64(
+                                         self._source_code_base_url + 'iotcore-mqtt-dispatcher.py'),
+                                     'main:handler',
+                                     'python:3.6',
+                                     env={
+                                         'IOTCORE_MQTT_DISPATCHER_INDEX': str(device_idx),
+                                         'IOTCORE_MQTT_DISPATCHER_PROJECT_ID': self._project_id,
+                                         'IOTCORE_MQTT_DISPATCHER_REGION_NAME': self._region_name,
+                                         'IOTCORE_MQTT_DISPATCHER_REGISTRY_ID': self._registry_id,
+                                         'IOTCORE_MQTT_DISPATCHER_DEVICE_ID': device_info['id'],
+                                         'IOTCORE_MQTT_DISPATCHER_PRIVATE_KEY': device_info['keys']['private_key'],
+                                     })
 
     def _create_ssh_client(self, host, username, password):
         ssh_client = paramiko.SSHClient()
@@ -454,6 +467,8 @@ metadata:
   name: tdemo-{device_idx}
   labels:
     app: iotcoredemo
+    iguazio.com/index: "{device_idx}"
+    iguazio.com/monitor-state: "true"
 spec:
   selector:
     matchLabels:
@@ -694,6 +709,8 @@ if __name__ == '__main__':
                                  os.environ['DEPLOYER_DEVICE_ID_FORMAT'],
                                  2,
                                  service_account_info,
-                                 os.environ['DEPLOYER_SOURCE_CODE_BASE_URL'])
+                                 os.environ['DEPLOYER_SOURCE_CODE_BASE_URL'],
+                                 os.environ['DEPLOYER_SYSTEM_PASSWORD'],
+                                 os.environ['DEPLOYER_SSH_PASSWORD'])
 
     demo_deployer.deploy()
