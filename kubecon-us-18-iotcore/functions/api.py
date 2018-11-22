@@ -39,14 +39,22 @@ def _get_devices(context):
     for device in devices:
 
         # get the state
-        device['state'] = context.iotcore_client. \
+        device['states'] = context.iotcore_client. \
             projects(). \
             locations(). \
             registries(). \
             devices(). \
             states(). \
             list(name=device['name']). \
-            execute()
+            execute()['deviceStates']
+
+        # iterate over state and convert binary data
+        for state in device['states']:
+            try:
+                state['value'] = json.loads(base64.b64decode(state['binaryData']).decode('ascii'))
+                del state['binaryData']
+            except:
+                pass
 
         # get the state
         device['config'] = context.iotcore_client. \
@@ -58,36 +66,45 @@ def _get_devices(context):
             list(name=device['name']). \
             execute()['deviceConfigs'][0]
 
+        try:
+            device['config']['value'] = json.loads(base64.b64decode(device['config']['binaryData']).decode('ascii'))
+            del device['config']['binaryData']
+        except:
+            pass
+
     return devices
 
 
-def _post_configurations(context, request):
-    context.logger.info_with('Updating configuration',
-                             location_prefix=request['location_prefix'],
-                             configuration=request['configuration'])
+def _post_configurations(context, configurations):
+    context.logger.info_with('Updating device configurations',
+                             configurations=configurations)
 
-    encoded_configuration = json.dumps(request['configuration'])
+    # get devices
+    devices = _get_devices(context)
+
+    # get per device configurations
+    device_configurations = _generate_device_configurations(context, devices, configurations)
+
+    context.logger.debug_with('Generated device configurations',
+                              device_configurations=device_configurations)
 
     # iterate over devices
-    for device in _get_devices(context):
-
-        # skip if device isn't in location prefix
-        if not device['metadata']['location'].startswith(request['location_prefix']):
-            continue
+    for device_name, device_configuration in device_configurations.items():
+        encoded_device_configuration = json.dumps(device_configuration)
 
         config_body = {
             'versionToUpdate': "0",
-            'binaryData': base64.urlsafe_b64encode(encoded_configuration.encode('utf-8')).decode('ascii')
+            'binaryData': base64.urlsafe_b64encode(encoded_device_configuration.encode('utf-8')).decode('ascii')
         }
 
-        context.logger.debug_with('Updating device configuration', device_name=device['name'])
+        context.logger.debug_with('Updating device configuration', device_name=device_name)
 
         context.iotcore_client. \
             projects(). \
             locations(). \
             registries(). \
             devices(). \
-            modifyCloudToDeviceConfig(name=device['name'], body=config_body) \
+            modifyCloudToDeviceConfig(name=device_name, body=config_body) \
             .execute()
 
 
@@ -108,3 +125,53 @@ def _create_iotcore_client(service_account_info):
         'v1',
         discoveryServiceUrl=discovery_url,
         credentials=scoped_credentials)
+
+
+def _generate_device_configurations(context, devices, configuration):
+    device_configurations = {}
+
+    # iterate over devices
+    for device in devices:
+        device_configuration = {}
+
+        # get the labels
+        device_labels = device['metadata']
+
+        # iterate over services in the configuration
+        for service_name, service_configurations in configuration['services'].items():
+
+            for service_configuration in service_configurations:
+
+                # check if all selectors match the labels
+                if _check_selectors_match(context, service_configuration.get('selectors'), device_labels):
+
+                    # add the current configuration to the service
+                    device_configuration[service_name] = {
+                        'source': service_configuration['source']
+                    }
+
+                    # we're done for this service
+                    break
+
+        device_configurations[device['name']] = device_configuration
+
+    return device_configurations
+
+
+def _check_selectors_match(context, selectors, labels):
+
+    # if no selectors - auto match
+    if selectors is None:
+        return True
+
+    # iterate over selectors
+    for selector in selectors:
+        selector_key, selector_value = selector.split('=')
+
+        if selector_key not in labels:
+            return False
+
+        if not labels[selector_key].startswith(selector_value):
+            return False
+
+    return True

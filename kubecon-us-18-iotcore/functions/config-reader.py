@@ -20,46 +20,14 @@ def handler(context, event):
     context.logger.debug_with('Got event', body=event.body.decode('utf-8'))
     event.body = json.loads(event.body.decode('utf-8'))
 
-    # sync the docker image
-    context.platform.call_function('sync-docker-image', nuclio_sdk.Event(body={
-        'source': event.body['source'],
-        'dest': {
-            'url': context.config['local_registry_url'],
-            'creds': {
-                'username': context.config['local_registry_username'],
-                'password': context.config['local_registry_password']
-            }
-        }
-    }))
+    # iterate over services
+    for service_name, service_config in event.body.items():
 
-    local_registry_url = context.config['local_registry_url']
-
-    # get service namespace, name and image
-    deployment_namespace = event.body.get('namespace') or context.namespace
-    deployment_name = event.body['name'] + '-' + context.config['index']
-    deployment_image = f'{local_registry_url}/{event.body["source"]["image"]}'
-
-    # update the deployment to use the version
-    context.logger.debug_with('Updating deployment image',
-                              deployment_namespace=deployment_namespace,
-                              deployment_name=deployment_name,
-                              deployment_image=deployment_image)
-
-    # update the deployment
-    kubernetes.client.AppsV1Api().patch_namespaced_deployment(deployment_name, deployment_namespace, {
-        'spec': {
-            'template': {
-                'spec': {
-                    'containers': [
-                        {
-                            'name': event.body['name'],
-                            'image': deployment_image
-                        }
-                    ]
-                }
-            }
-        }
-    })
+        # update service configuration
+        _update_service_config(context,
+                               event.body.get('namespace') or context.namespace,
+                               service_name,
+                               service_config)
 
 
 def init_context(context):
@@ -77,4 +45,56 @@ def init_context(context):
         'local_registry_url': os.environ['CONFIG_READER_LOCAL_REGISTRY_URL'],
         'local_registry_username': os.environ['CONFIG_READER_LOCAL_REGISTRY_USERNAME'],
         'local_registry_password': os.environ['CONFIG_READER_LOCAL_REGISTRY_PASSWORD']
+    })
+
+
+def _update_service_config(context, namespace, service_name, service_config):
+    context.logger.info_with('Syncing service image to local repository',
+                             name=service_name,
+                             service_config=service_config)
+
+    source_url, source_image = service_config['source'].split('/')
+
+    # sync the docker image
+    context.platform.call_function('sync-docker-image', nuclio_sdk.Event(body={
+        'source': {
+            'url': source_url,
+            'image': source_image
+        },
+        'dest': {
+            'url': context.config['local_registry_url'],
+            'creds': {
+                'username': context.config['local_registry_username'],
+                'password': context.config['local_registry_password']
+            }
+        }
+    }))
+
+    local_registry_url = context.config['local_registry_url']
+
+    # get service namespace, name and image
+    deployment_namespace = namespace
+    deployment_name = service_name + '-' + context.config['index']
+    deployment_image = f'{local_registry_url}/{service_config["source"]}'
+
+    # update the deployment to use the version
+    context.logger.info_with('Updating deployment image',
+                             deployment_namespace=deployment_namespace,
+                             deployment_name=deployment_name,
+                             deployment_image=deployment_image)
+
+    # update the deployment
+    kubernetes.client.AppsV1Api().patch_namespaced_deployment(deployment_name, deployment_namespace, {
+        'spec': {
+            'template': {
+                'spec': {
+                    'containers': [
+                        {
+                            'name': 'tdemo',
+                            'image': deployment_image
+                        }
+                    ]
+                }
+            }
+        }
     })

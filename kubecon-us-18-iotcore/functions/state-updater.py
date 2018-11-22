@@ -66,7 +66,7 @@ def _get_deployment_states(context, label_selector):
     deployment_states = {}
 
     for deployment in deployments.items:
-        deployment_states[deployment.metadata.name] = {
+        deployment_states[deployment.metadata.labels['iguazio.com/app']] = {
             'image': deployment.spec.template.spec.containers[0].image,
             'replicas': deployment.status.replicas,
             'readyReplicas': deployment.status.ready_replicas

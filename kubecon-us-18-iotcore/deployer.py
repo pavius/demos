@@ -113,14 +113,17 @@ class DemoDeployer(object):
         self._create_nuclio_function(f'api',
                                      'default-tenant',
                                      project_name,
-                                     self._url_contents_to_base64(self._source_code_base_url + 'api.py'),
+                                     self._file_contents_to_base64('./functions/api.py'),
                                      'main:handler',
                                      'python:3.6',
                                      base_image='python:3.6',
                                      triggers={
                                          'http': {
                                              'kind': 'http',
-                                             'maxWorkers': 10
+                                             'maxWorkers': 10,
+                                             'attributes': {
+                                                 'port': 30570
+                                             }
                                          }
                                      },
                                      build_commands=[
@@ -140,13 +143,14 @@ class DemoDeployer(object):
         project_name = self._create_nuclio_project('default-tenant', f'IoT Core Device #{device_idx}', name=f'iot-core-demo-device-{device_idx}')
 
         # create the device service
-        self._create_service(device_idx, device_info['id'])
+        for service_name in ['apiserver', 'detector']:
+            self._create_service(service_name, device_idx, device_info['id'])
 
         # create config-reader function
         self._create_nuclio_function(f'config-reader-{device_idx}',
                                      'default-tenant',
                                      project_name,
-                                     self._url_contents_to_base64(self._source_code_base_url + 'config-reader.py'),
+                                     self._file_contents_to_base64('./functions/config-reader.py'),
                                      'main:handler',
                                      'python:3.6',
                                      env={
@@ -173,8 +177,7 @@ class DemoDeployer(object):
         self._create_nuclio_function(f'iotcore-mqtt-dispatcher-{device_idx}',
                                      'default-tenant',
                                      project_name,
-                                     self._url_contents_to_base64(
-                                         self._source_code_base_url + 'iotcore-mqtt-dispatcher.py'),
+                                     self._file_contents_to_base64('./functions/iotcore-mqtt-dispatcher.py'),
                                      'main:handler',
                                      'python:3.6',
                                      env={
@@ -439,52 +442,39 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io' | kubectl apply -f -
 ''')
 
-    def _create_service(self, device_idx, location):
-        service_port = 31900 + device_idx
-        self._logger.info_with('Creating tdemo app',
-                               device_idx=device_idx,
-                               service_port=service_port)
+    def _create_service(self, name, device_idx, device_id):
+        self._logger.info_with('Creating service',
+                               name=name,
+                               device_idx=device_idx)
+
+        resource_name = f'{name}-{device_idx}'
 
         self._run_command('appnode', f'''echo 'apiVersion: v1
-kind: Service
-metadata:
-  name: tdemo-{device_idx}
-  labels:
-    app: iotcoredemo
-spec:
-  type: NodePort
-  ports:
-  - port: 8080
-    protocol: TCP
-    name: http
-    nodePort: {service_port}
-  selector:
-    app: tdemo-{device_idx}
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: tdemo-{device_idx}
+  name: {resource_name}
   labels:
     app: iotcoredemo
+    iguazio.com/app: "{name}"
     iguazio.com/index: "{device_idx}"
     iguazio.com/monitor-state: "true"
 spec:
   selector:
     matchLabels:
-      app: tdemo-{device_idx}
+      app: {resource_name}
   replicas: 1
   template:
     metadata:
       labels:
-        app: tdemo-{device_idx}
+        app: {resource_name}
     spec:
       containers:
       - name: tdemo
         image: pavius/tdemo:0.0.1
         env:
         - name: TDEMO_LOCATION
-          value: {location}
+          value: {device_id}
         ports:
         - containerPort: 8080
 ' | kubectl apply -n default-tenant -f -
@@ -575,17 +565,26 @@ spec:
         locations = [
             'us/colorado/boulder',
             'us/colorado/denver',
-            'us/colorado/aspen',
             'us/arizona/phoenix',
             'us/arizona/scottsdale'
         ]
 
+        num_gpus = [
+            2,
+            0,
+            2,
+            2,
+            0
+        ]
+
         device_location = locations[device_idx]
+        gpus = num_gpus[device_idx]
 
         self._logger.debug_with('Creating device',
                                 registry_name=registry_name,
                                 device_id=device_id,
-                                location=device_location)
+                                location=device_location,
+                                gpus=gpus)
 
         # generate device keys
         device_keys = self._create_device_keypair(device_id)
@@ -600,7 +599,8 @@ spec:
             }],
             'metadata': {
                 'index': str(device_idx),
-                'location': device_location
+                'location': device_location,
+                'gpus': str(gpus)
             }
         }
 
@@ -707,7 +707,7 @@ if __name__ == '__main__':
                                  os.environ['DEPLOYER_REGION_NAME'],
                                  os.environ['DEPLOYER_REGISTRY_ID'],
                                  os.environ['DEPLOYER_DEVICE_ID_FORMAT'],
-                                 2,
+                                 3,
                                  service_account_info,
                                  os.environ['DEPLOYER_SOURCE_CODE_BASE_URL'],
                                  os.environ['DEPLOYER_SYSTEM_PASSWORD'],
