@@ -1,6 +1,26 @@
 <template>
   <v-app>
     <v-dialog v-model="configureDialogVisible" width="900">
+      <v-card>
+        <v-card-title
+          class="headline grey lighten-2"
+          primary-title
+        >
+          Configuration
+        </v-card-title>
+        <div>
+          <v-card-text>
+          <v-textarea
+            v-model="configuration"
+            auto-grow
+          ></v-textarea>
+          </v-card-text>
+        </div>
+        <div>
+          <v-btn color="red darken-1" flat @click.native="setConfigureDialogVisible(false)">Cancel</v-btn>
+          <v-btn color="blue darken-1" flat @click.native="updateConfigurations()">Apply</v-btn>
+        </div>
+      </v-card>
     </v-dialog>
 
     <v-container fluid style="padding-top: 10px">
@@ -12,7 +32,7 @@
           </v-breadcrumbs>
         </v-flex>
         <v-flex xs6 style="text-align: right">
-          <v-btn color="info" @click.native="showConfigureDialog()" dark class="mb-2">Configure</v-btn>
+          <v-btn color="info" @click.native="setConfigureDialogVisible(true)" dark class="mb-2">Configure</v-btn>
         </v-flex>
         <v-flex v-for="device in deviceItems" :key="device.id" xs12>
           <v-toolbar flat color="white">
@@ -62,6 +82,7 @@ export default {
     return {
       deviceItems: [],
       configureDialogVisible: false,
+      configuration: '',
       serviceHeaders: [
         { text: 'Service name', align: 'center' },
         { text: 'Version', align: 'center' },
@@ -70,6 +91,22 @@ export default {
     }
   },
   methods: {
+
+    setConfigureDialogVisible: function (visible) {
+      this.configureDialogVisible = visible
+    },
+
+    updateConfigurations: function () {
+      let headers = {
+        'Content-Type': 'application/json'
+      }
+
+      this.$http.post(process.env.API_URL + '/configurations', JSON.parse(this.configuration), {headers: headers}).then(response => {
+      }, response => {
+      })
+
+      this.setConfigureDialogVisible(false)
+    },
 
     getDeviceVersion: function (configVersion, runningVersion) {
       if (!configVersion || runningVersion === configVersion) {
@@ -86,7 +123,7 @@ export default {
         // iterate over devices
         Object.values(response.body).forEach(function (responseDevice) {
 
-          let labels = Object.keys(responseDevice.metadata).map(key => `${key}=${responseDevice.metadata[key]}`)
+          let labels = Object.keys(responseDevice.metadata).filter(label => label !== "index").map(key => `${key}=${responseDevice.metadata[key]}`)
 
           let device = {
             id: responseDevice.id,
@@ -120,7 +157,6 @@ export default {
         })
 
         this.deviceItems = devices
-        console.log(this.deviceItems)
 
       }, response => {
         console.warn('Failed to get devices')

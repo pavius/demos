@@ -22,25 +22,22 @@ class DemoDeployer(object):
 
     def __init__(self,
                  logger,
-                 datanode_external_ip,
-                 appnode_external_ip,
+                 system_info_url,
+                 system_id,
                  project_id,
                  region_name,
                  registry_id,
                  device_id_format,
                  num_devices,
                  service_account_info,
-                 source_code_base_url,
-                 system_password,
-                 ssh_password):
+                 source_code_base_url):
 
         self._logger = logger
+
+        # get system info
+        self._system_info = self._get_system_info(system_info_url, system_id)
+
         self._ssh_clients = {}
-        self._appnode = {'external_ip': appnode_external_ip}
-        self._datanode = {'external_ip': datanode_external_ip}
-        self._username = None
-        self._system_password = None
-        self._ssh_password = None
         self._dashboard_cookies = None
         self._project_id = project_id
         self._region_name = region_name
@@ -49,18 +46,15 @@ class DemoDeployer(object):
         self._num_devices = num_devices
         self._service_account_info = service_account_info
         self._source_code_base_url = source_code_base_url
-        self._system_password = system_password
-        self._ssh_password = ssh_password
 
         self._iotcore_client = self._create_iotcore_client(service_account_info)
 
     def deploy(self):
-        self._username = 'iguazio'
 
         # connect to the appnode
-        self._ssh_clients['appnode'] = self._create_ssh_client(self._appnode['external_ip'],
-                                                               self._username,
-                                                               self._ssh_password)
+        self._ssh_clients['appnode'] = self._create_ssh_client(self._system_info['appnode']['external_ip'],
+                                                               self._system_info['ssh_credentials']['username'],
+                                                               self._system_info['ssh_credentials']['password'])
 
         # get docker registry info
         docker_registry_info = self._get_docker_registry_info()
@@ -70,7 +64,8 @@ class DemoDeployer(object):
         self._patch_roles()
 
         # create control plane session
-        self._create_control_plane_session(self._username, self._system_password)
+        self._create_control_plane_session(self._system_info['system_credentials']['username'],
+                                           self._system_info['system_credentials']['password'])
 
         # create iotcore resources
         device_infos = self._create_iotcore_resources()
@@ -89,6 +84,25 @@ class DemoDeployer(object):
         # close ssh client
         for ssh_client in self._ssh_clients.values():
             ssh_client.close()
+
+    def _get_system_info(self, system_info_url, system_id):
+        system_config = self._send_http_request(system_info_url,
+                                                'get',
+                                                f'/api/systems/{system_id}')
+
+        return {
+            'datanode': {
+                'external_ip': system_config['status']['datanode_cluster']['nodes'][0]['status']['ip_addresses']['external'][0]
+            },
+            'appnode': {
+                'external_ip': system_config['status']['appnode_cluster']['nodes'][0]['status']['ip_addresses']['external'][0]
+            },
+            'system_credentials': {
+                'username': system_config['meta']['labels']['User.Username'],
+                'password': system_config['meta']['labels']['User.Password'],
+            },
+            'ssh_credentials': system_config['status']['datanode_cluster']['ssh_credentials']
+        }
 
     def _create_system_project(self):
 
@@ -238,7 +252,7 @@ class DemoDeployer(object):
                 'password': auth_info['password']
             }
 
-    def _send_http_request(self, url, method, path, body, headers=None, return_raw_response=False):
+    def _send_http_request(self, url, method, path, body=None, headers=None, return_raw_response=False, cookies=None):
         self._logger.debug_with(f'Sending HTTP request to {url}',
                                 method=method,
                                 path=path,
@@ -247,7 +261,7 @@ class DemoDeployer(object):
 
         response = getattr(requests, method)(url + path,
                                              json=body,
-                                             cookies=self._dashboard_cookies,
+                                             cookies=cookies,
                                              headers=headers,
                                              verify=False)
 
@@ -268,15 +282,15 @@ class DemoDeployer(object):
             return {}
 
     def _send_dashboard_request(self, method, path, body=None, headers=None, return_raw_response=False):
-        return self._send_http_request('https://' + self._datanode['external_ip'],
+        return self._send_http_request('https://' + self._system_info['datanode']['external_ip'],
                                        method,
                                        path,
                                        body,
                                        headers,
-                                       return_raw_response)
+                                       return_raw_response,
+                                       cookies=self._dashboard_cookies)
 
     def _send_provazio_request(self, method, path, body=None, headers=None, return_raw_response=False):
-        # 'http://localhost:18060'
         return self._send_http_request('http://dev.cloud.iguazio.com/api',
                                        method,
                                        path,
@@ -701,16 +715,14 @@ if __name__ == '__main__':
         service_account_info = json.load(service_account_file)
 
     demo_deployer = DemoDeployer(logger,
-                                 os.environ['DEPLOYER_DATANODE_IP'],
-                                 os.environ['DEPLOYER_APPNODE_IP'],
+                                 os.environ['DEPLOYER_SYSTEM_INFO_URL'],
+                                 os.environ['DEPLOYER_SYSTEM_ID'],
                                  os.environ['DEPLOYER_PROJECT_ID'],
                                  os.environ['DEPLOYER_REGION_NAME'],
                                  os.environ['DEPLOYER_REGISTRY_ID'],
                                  os.environ['DEPLOYER_DEVICE_ID_FORMAT'],
                                  3,
                                  service_account_info,
-                                 os.environ['DEPLOYER_SOURCE_CODE_BASE_URL'],
-                                 os.environ['DEPLOYER_SYSTEM_PASSWORD'],
-                                 os.environ['DEPLOYER_SSH_PASSWORD'])
+                                 os.environ['DEPLOYER_SOURCE_CODE_BASE_URL'])
 
     demo_deployer.deploy()

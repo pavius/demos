@@ -23,6 +23,7 @@ import delegator
 #         name: docker-sock
 #         mountPath: /var/run/docker.sock
 
+
 def handler(context, event):
     source = event.body.get('source', {})
     dest = event.body.get('dest', {})

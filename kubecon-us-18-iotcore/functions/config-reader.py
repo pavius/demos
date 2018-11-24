@@ -49,11 +49,14 @@ def init_context(context):
 
 
 def _update_service_config(context, namespace, service_name, service_config):
+    source_url, source_image = service_config['source'].split('/')
+
     context.logger.info_with('Syncing service image to local repository',
                              name=service_name,
+                             source=service_config['source'],
+                             source_url=source_url,
+                             source_image=source_image,
                              service_config=service_config)
-
-    source_url, source_image = service_config['source'].split('/')
 
     # sync the docker image
     context.platform.call_function('sync-docker-image', nuclio_sdk.Event(body={
@@ -75,7 +78,7 @@ def _update_service_config(context, namespace, service_name, service_config):
     # get service namespace, name and image
     deployment_namespace = namespace
     deployment_name = service_name + '-' + context.config['index']
-    deployment_image = f'{local_registry_url}/{service_config["source"]}'
+    deployment_image = f'{local_registry_url}/{source_image}'
 
     # update the deployment to use the version
     context.logger.info_with('Updating deployment image',
