@@ -203,6 +203,21 @@ class DemoDeployer(object):
                                          'IOTCORE_MQTT_DISPATCHER_PRIVATE_KEY': device_info['keys']['private_key'],
                                      })
 
+        # telemetry updater only for first device
+        if device_idx == 0:
+
+            # create state-updater function
+            self._create_nuclio_function(f'telemetry-updater-{device_idx}',
+                                         'default-tenant',
+                                         project_name,
+                                         self._file_contents_to_base64('./functions/telemetry-updater.py'),
+                                         'main:handler',
+                                         'python:3.6',
+                                         env={
+                                             'TELEMETRY_UPDATER_INDEX': str(device_idx),
+                                         })
+
+
     def _create_ssh_client(self, host, username, password):
         ssh_client = paramiko.SSHClient()
         ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -562,6 +577,9 @@ spec:
 
         registry_parent = 'projects/{}/locations/{}'.format(project_id, region_name)
         body = {
+            'eventNotificationConfigs': [{
+                'pubsubTopicName': 'projects/{}/topics/telemetry'.format(project_id)
+            }],
             'id': registry_id
         }
 
