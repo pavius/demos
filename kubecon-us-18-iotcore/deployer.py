@@ -57,8 +57,8 @@ class DemoDeployer(object):
                                                                self._system_info['ssh_credentials']['password'])
 
         # get docker registry info
-        docker_registry_info = self._get_docker_registry_info()
-        self._logger.debug_with('Got Docker registry info', info=docker_registry_info)
+        # docker_registry_info = self._get_docker_registry_info()
+        # self._logger.debug_with('Got Docker registry info', info=docker_registry_info)
 
         # patch roles on appnode to allow nuclio functions to do everything
         self._patch_roles()
@@ -79,7 +79,7 @@ class DemoDeployer(object):
 
         # for each device
         for device_info in device_infos:
-            self._create_device_project(device_info['idx'], device_info, docker_registry_info)
+            self._create_device_project(device_info['idx'], device_info)
 
         # close ssh client
         for ssh_client in self._ssh_clients.values():
@@ -91,6 +91,7 @@ class DemoDeployer(object):
                                                 f'/api/systems/{system_id}')
 
         return {
+            'id': system_id,
             'datanode': {
                 'external_ip': system_config['status']['datanode_cluster']['nodes'][0]['status']['ip_addresses']['external'][0]
             },
@@ -151,7 +152,7 @@ class DemoDeployer(object):
                                          'DEMO_API_SERVICE_ACCOUNT': json.dumps(self._service_account_info)
                                      })
 
-    def _create_device_project(self, device_idx, device_info, docker_registry_info):
+    def _create_device_project(self, device_idx, device_info):
 
         # create nuclio project
         project_name = self._create_nuclio_project('default-tenant', f'IoT Core Device #{device_idx}', name=f'iot-core-demo-device-{device_idx}')
@@ -169,9 +170,7 @@ class DemoDeployer(object):
                                      'python:3.6',
                                      env={
                                          'CONFIG_READER_INDEX': str(device_idx),
-                                         'CONFIG_READER_LOCAL_REGISTRY_URL': docker_registry_info['url'],
-                                         'CONFIG_READER_LOCAL_REGISTRY_USERNAME': docker_registry_info['username'],
-                                         'CONFIG_READER_LOCAL_REGISTRY_PASSWORD': docker_registry_info['password']
+                                         'CONFIG_READER_LOCAL_REGISTRY_URL': f'docker-registry.iguazio.app.{self._system_info["id"]}.dev.trl.iguazio.com:80'
                                      })
 
         # create state-updater function
@@ -578,8 +577,11 @@ spec:
         registry_parent = 'projects/{}/locations/{}'.format(project_id, region_name)
         body = {
             'eventNotificationConfigs': [{
-                'pubsubTopicName': 'projects/{}/topics/telemetry'.format(project_id)
+                'pubsubTopicName': 'projects/{}/topics/{}-telemetry'.format(project_id, registry_id)
             }],
+            'stateNotificationConfig': {
+                'pubsubTopicName': 'projects/{}/topics/{}-state'.format(project_id, registry_id)
+            },
             'id': registry_id
         }
 

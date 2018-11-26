@@ -42,7 +42,7 @@
               inset
               vertical
             ></v-divider>
-            <v-chip v-for="label in device.labels"> {{ label }} </v-chip>
+            <v-chip v-for="label in device.labels" :key="label"> {{ label }} </v-chip>
           </v-toolbar>
           <v-data-table
             :headers="serviceHeaders"
@@ -116,14 +116,21 @@ export default {
       return `${runningVersion} => ${configVersion}`
     },
 
+    getServiceVersionFromURL: function (url) {
+      let splitURL = url.split(':')
+      return splitURL[splitURL.length - 1]
+    },
+
     refreshDevices: function () {
+      let self = this
+
       this.$http.get(process.env.API_URL + '/devices').then(response => {
         let devices = []
 
         // iterate over devices
         Object.values(response.body).forEach(function (responseDevice) {
 
-          let labels = Object.keys(responseDevice.metadata).filter(label => label !== "index").map(key => `${key}=${responseDevice.metadata[key]}`)
+          let labels = Object.keys(responseDevice.metadata).filter(label => label !== 'index').map(key => `${key}=${responseDevice.metadata[key]}`)
 
           let device = {
             id: responseDevice.id,
@@ -139,13 +146,13 @@ export default {
           Object.keys(deviceState).forEach(function (serviceName) {
             let serviceConfigVersion = ''
             if (deviceConfig && deviceConfig[serviceName] && deviceConfig[serviceName].source) {
-              serviceConfigVersion = deviceConfig[serviceName].source.split(':')[1]
+              serviceConfigVersion = self.getServiceVersionFromURL(deviceConfig[serviceName].source)
             }
 
             let service = {
               name: serviceName,
               configVersion: serviceConfigVersion,
-              runningVersion: deviceState[serviceName].image.split(':')[1],
+              runningVersion: self.getServiceVersionFromURL(deviceState[serviceName].image),
               readyReplicas: deviceState[serviceName].readyReplicas,
               replicas: deviceState[serviceName].replicas
             }

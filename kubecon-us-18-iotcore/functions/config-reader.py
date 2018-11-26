@@ -42,9 +42,7 @@ def init_context(context):
     setattr(context, 'namespace', current_namespace)
     setattr(context, 'config', {
         'index': os.environ['CONFIG_READER_INDEX'],
-        'local_registry_url': os.environ['CONFIG_READER_LOCAL_REGISTRY_URL'],
-        'local_registry_username': os.environ['CONFIG_READER_LOCAL_REGISTRY_USERNAME'],
-        'local_registry_password': os.environ['CONFIG_READER_LOCAL_REGISTRY_PASSWORD']
+        'local_registry_url': os.environ['CONFIG_READER_LOCAL_REGISTRY_URL']
     })
 
 
@@ -58,6 +56,8 @@ def _update_service_config(context, namespace, service_name, service_config):
                              source_image=source_image,
                              service_config=service_config)
 
+    local_registry_url = context.config['local_registry_url']
+
     # sync the docker image
     context.platform.call_function('sync-docker-image', nuclio_sdk.Event(body={
         'source': {
@@ -65,15 +65,9 @@ def _update_service_config(context, namespace, service_name, service_config):
             'image': source_image
         },
         'dest': {
-            'url': context.config['local_registry_url'],
-            'creds': {
-                'username': context.config['local_registry_username'],
-                'password': context.config['local_registry_password']
-            }
+            'url': local_registry_url
         }
     }))
-
-    local_registry_url = context.config['local_registry_url']
 
     # get service namespace, name and image
     deployment_namespace = namespace
