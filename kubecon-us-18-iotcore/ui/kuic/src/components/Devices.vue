@@ -13,6 +13,7 @@
           <v-textarea
             v-model="configuration"
             auto-grow
+            style="font-family: monospace; font-size: 14px; padding-top: 0px"
           ></v-textarea>
           </v-card-text>
         </div>
